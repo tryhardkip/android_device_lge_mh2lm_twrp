@@ -142,3 +142,14 @@ fastboot flash boot out/target/product/mh2lm/boot.img
   `*.dtbo` list) or `mkbootimg --recovery_dtbo` would fail. If a future kernel
   fixes the overlay DTS, re-enable those two flags and drop the "Disable device
   DT overlays" step in `.github/workflows/build.yml`.
+- Recovery ramdisk root (`$OUT/root`): on this Android-16 base
+  `BOARD_USES_RECOVERY_AS_BOOT` no longer aliases the boot ramdisk directory to
+  `$(TARGET_ROOT_OUT)` — the generic boot ramdisk is built at `$OUT/ramdisk`
+  instead. TWRP's recovery ramdisk rule still rsyncs `$OUT/root`, which is
+  therefore absent and fails packaging with
+  `rsync: link_stat ".../root" ... No such file or directory`. The CI "Build
+  recovery" step works around this by seeding `$OUT/root` from the freshly built
+  `$OUT/ramdisk` and re-running `make ${BUILD_TARGET}image` (a second pass only
+  redoes the tiny recovery packaging + `boot.img`). If a future TWRP branch
+  builds the recovery ramdisk from `$OUT/ramdisk` directly, drop the two-pass
+  logic in `.github/workflows/build.yml`.

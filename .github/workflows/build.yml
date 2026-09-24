@@ -162,7 +162,31 @@ jobs:
           export LC_ALL=C
           source build/envsetup.sh
           lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
+
+          # First build pass. On this Android-16 base, BOARD_USES_RECOVERY_AS_BOOT
+          # no longer aliases the boot ramdisk dir to $OUT/root: the generic boot
+          # ramdisk is populated at $OUT/ramdisk instead. TWRP's recovery ramdisk
+          # rule still rsyncs $(TARGET_ROOT_OUT) (= $OUT/root), which is therefore
+          # absent and makes the recovery packaging step fail with:
+          #   rsync: link_stat ".../out/target/product/<dev>/root" ... No such file
+          # Seed $OUT/root from the freshly built generic ramdisk and re-run; the
+          # second pass only redoes the tiny recovery packaging + boot.img.
+          set +e
           make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)"
+          BUILD_RC=$?
+          set -e
+          if [ "$BUILD_RC" -ne 0 ]; then
+            echo "::group::recovery-as-boot root workaround"
+            if [ -d "$OUT/ramdisk" ] && [ ! -e "$OUT/root" ]; then
+              echo "Seeding $OUT/root from generic ramdisk for recovery rsync"
+              cp -a "$OUT/ramdisk" "$OUT/root"
+            else
+              echo "WARN: cannot seed \$OUT/root (ramdisk missing or root exists);" \
+                   "first-pass failure was likely unrelated"
+            fi
+            echo "::endgroup::"
+            make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)"
+          fi
 
       - name: Build flashable installer zip
         run: |

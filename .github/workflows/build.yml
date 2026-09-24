@@ -75,7 +75,7 @@ jobs:
           echo "$HOME/bin" >> "$GITHUB_PATH"
 
       - name: Initialize and sync TWRP minimal manifest
-        timeout-minutes: 90
+        timeout-minutes: 180
         run: |
           df -h /
           mkdir -p "$HOME/twrp"
@@ -84,17 +84,19 @@ jobs:
             -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git \
             -b ${{ github.event.inputs.manifest_branch }}
           # Retry sync a few times to survive transient fetch errors in CI.
+          # Each attempt is hard-capped with `timeout` so a hung fetch gets
+          # killed and retried instead of freezing the whole step.
           n=0
-          until [ "$n" -ge 3 ]; do
-            if repo sync -c -j"$(nproc --all)" --force-sync \
+          until [ "$n" -ge 4 ]; do
+            if timeout 45m repo sync -c -j4 --force-sync \
                  --no-clone-bundle --no-tags --optimized-fetch --retry-fetches=3; then
               break
             fi
             n=$((n+1))
-            echo "repo sync failed (attempt $n), retrying in 15s..."
+            echo "repo sync failed/timed out (attempt $n), retrying in 15s..."
             sleep 15
           done
-          [ "$n" -lt 3 ] || { echo "repo sync failed after retries"; exit 1; }
+          [ "$n" -lt 4 ] || { echo "repo sync failed after retries"; exit 1; }
 
       - name: Place device tree and kernel source
         run: |

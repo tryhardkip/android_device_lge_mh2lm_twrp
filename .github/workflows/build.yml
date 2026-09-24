@@ -171,19 +171,26 @@ jobs:
           #   rsync: link_stat ".../out/target/product/<dev>/root" ... No such file
           # Seed $OUT/root from the freshly built generic ramdisk and re-run; the
           # second pass only redoes the tiny recovery packaging + boot.img.
+          seed_root() {
+            if [ -d "$OUT/ramdisk" ] && { [ ! -d "$OUT/root" ] || [ -z "$(ls -A "$OUT/root" 2>/dev/null)" ]; }; then
+              echo "Seeding $OUT/root from $OUT/ramdisk for the recovery ramdisk rsync"
+              rm -rf "$OUT/root"
+              cp -a "$OUT/ramdisk" "$OUT/root"
+              return 0
+            fi
+            echo "seed_root: nothing to do (ramdisk missing, or root already populated)"
+            return 1
+          }
+
           set +e
           make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)"
           BUILD_RC=$?
           set -e
           if [ "$BUILD_RC" -ne 0 ]; then
-            echo "::group::recovery-as-boot root workaround"
-            if [ -d "$OUT/ramdisk" ] && [ ! -e "$OUT/root" ]; then
-              echo "Seeding $OUT/root from generic ramdisk for recovery rsync"
-              cp -a "$OUT/ramdisk" "$OUT/root"
-            else
-              echo "WARN: cannot seed \$OUT/root (ramdisk missing or root exists);" \
-                   "first-pass failure was likely unrelated"
-            fi
+            echo "::group::recovery-as-boot root workaround (first pass rc=$BUILD_RC)"
+            ls -la "$OUT" 2>/dev/null | sed 's/^/  /' || true
+            seed_root || echo "WARN: could not seed \$OUT/root; first-pass failure may be unrelated"
+            ls -ld "$OUT/ramdisk" "$OUT/root" 2>/dev/null | sed 's/^/  /' || true
             echo "::endgroup::"
             make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)"
           fi

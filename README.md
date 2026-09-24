@@ -45,10 +45,10 @@ TWRP for an Android 16 device is built against the TWRP minimal manifest
    repo sync -c -j$(nproc --all)
    ```
 
-2. Place this tree at `device/lge/mh2lm_twrp`:
+2. Place this tree at `device/lge/mh2lm`:
 
    ```bash
-   git clone https://github.com/tryhardkip/android_device_lge_mh2lm_twrp.git device/lge/mh2lm_twrp
+   git clone https://github.com/tryhardkip/android_device_lge_mh2lm_twrp.git device/lge/mh2lm
    ```
 
 3. Provide the kernel. This tree builds the kernel from source by default:

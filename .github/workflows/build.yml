@@ -30,7 +30,7 @@ on:
       DEVICE_PATH:
         description: "Device tree path in tree"
         required: true
-        default: "device/lge/mh2lm_twrp"
+        default: "device/lge/mh2lm"
       DEVICE_NAME:
         description: "Device codename (out product dir)"
         required: true

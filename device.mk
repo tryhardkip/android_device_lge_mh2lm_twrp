@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-LOCAL_PATH := device/lge/mh2lm_twrp
+LOCAL_PATH := device/lge/mh2lm
 
 # API level
 PRODUCT_SHIPPING_API_LEVEL := 29

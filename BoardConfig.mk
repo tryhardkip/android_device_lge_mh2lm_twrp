@@ -8,7 +8,7 @@
 # SoC: Qualcomm Snapdragon 855 (SM8150 / msmnile)
 #
 
-DEVICE_PATH := device/lge/mh2lm_twrp
+DEVICE_PATH := device/lge/mh2lm
 
 # Architecture
 TARGET_ARCH := arm64

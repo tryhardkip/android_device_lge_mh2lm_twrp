@@ -10,7 +10,7 @@
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
 
 # Inherit from the device configuration
-$(call inherit-product, device/lge/mh2lm_twrp/device.mk)
+$(call inherit-product, device/lge/mh2lm/device.mk)
 
 # Inherit TWRP common stuff
 $(call inherit-product, vendor/twrp/config/common.mk)

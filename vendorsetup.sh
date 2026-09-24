@@ -1,3 +1,0 @@
-add_lunch_combo twrp_mh2lm-user
-add_lunch_combo twrp_mh2lm-userdebug
-add_lunch_combo twrp_mh2lm-eng

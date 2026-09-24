@@ -1,0 +1,67 @@
+#!/sbin/sh
+#
+# Flashable installer for TWRP on LG G8X ThinQ / V50S (mh2lm).
+# Works in LineageOS recovery (sideload / install from storage) and in TWRP.
+#
+# This is a recovery-as-boot A/B device: TWRP lives in the boot image, so this
+# writes the packaged boot.img to the boot partition of the active slot.
+#
+# Recovery invokes: update-binary <api_version> <output_fd> <zip_path>
+#
+
+OUTFD=$2
+ZIP=$3
+
+ui_print() {
+    echo "ui_print $1" > /proc/self/fd/"$OUTFD"
+    echo "ui_print" > /proc/self/fd/"$OUTFD"
+}
+
+abort() {
+    ui_print "$1"
+    ui_print "Aborting."
+    exit 1
+}
+
+ui_print "*************************************"
+ui_print "  TWRP for LG G8X / V50S (mh2lm)"
+ui_print "  recovery-as-boot A/B installer"
+ui_print "*************************************"
+
+WORK=/tmp/twrp_install
+rm -rf "$WORK"
+mkdir -p "$WORK"
+
+ui_print "- Extracting boot image"
+unzip -o "$ZIP" boot.img -d "$WORK" >/dev/null 2>&1
+[ -f "$WORK/boot.img" ] || abort "! boot.img missing from package"
+
+# Detect the active A/B slot suffix (_a / _b).
+SLOT=$(getprop ro.boot.slot_suffix 2>/dev/null)
+if [ -z "$SLOT" ]; then
+    SLOT=$(grep -o 'androidboot.slot_suffix=[^ ]*' /proc/cmdline 2>/dev/null | cut -d= -f2)
+fi
+if [ -z "$SLOT" ]; then
+    S=$(grep -o 'androidboot.slot=[^ ]*' /proc/cmdline 2>/dev/null | cut -d= -f2)
+    [ -n "$S" ] && SLOT="_$S"
+fi
+ui_print "- Active slot: ${SLOT:-<none / non-slotted>}"
+
+# Resolve the boot block device.
+BOOT=
+for base in /dev/block/bootdevice/by-name /dev/block/by-name; do
+    if [ -e "$base/boot$SLOT" ]; then
+        BOOT="$base/boot$SLOT"
+        break
+    fi
+done
+[ -n "$BOOT" ] || abort "! Could not find boot partition (boot$SLOT)"
+
+ui_print "- Flashing TWRP to $BOOT"
+dd if="$WORK/boot.img" of="$BOOT" bs=4M 2>/dev/null || abort "! Flash failed"
+sync
+
+rm -rf "$WORK"
+ui_print "- Done."
+ui_print "- Reboot to recovery to enter TWRP."
+exit 0

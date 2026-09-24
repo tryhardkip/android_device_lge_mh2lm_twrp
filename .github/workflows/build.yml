@@ -111,6 +111,16 @@ jobs:
           done
           ls -lh "$OUT_DIR"/*.img || true
 
+      - name: Build flashable installer zip
+        run: |
+          cd "$HOME/twrp"
+          OUT_DIR="out/target/product/mh2lm"
+          IMG="$OUT_DIR/boot.img"
+          [ -f "$IMG" ] || IMG="$OUT_DIR/recovery.img"
+          bash "$GITHUB_WORKSPACE/device_tree/tools/mkzip.sh" \
+            "$IMG" "$OUT_DIR/TWRP-mh2lm-$(date +%Y%m%d).zip"
+          ls -lh "$OUT_DIR"/*.zip
+
       - name: Upload recovery artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -119,3 +129,4 @@ jobs:
           path: |
             /home/runner/twrp/out/target/product/mh2lm/boot.img
             /home/runner/twrp/out/target/product/mh2lm/recovery.img
+            /home/runner/twrp/out/target/product/mh2lm/TWRP-mh2lm-*.zip

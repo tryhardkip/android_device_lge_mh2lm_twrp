@@ -90,6 +90,22 @@ takes a while and needs the disk-cleanup step (already included) to fit.
 
 ## Flashing
 
+### Flashable zip (from LineageOS recovery or TWRP)
+
+The build/CI also produces `TWRP-mh2lm-<date>.zip`. It's a self-contained
+installer (`installer/META-INF/com/google/android/update-binary`, a shell
+script) that writes the TWRP `boot.img` to the active A/B slot. Because it
+ships its own installer script, it runs in the stock LineageOS recovery
+(sideload / install from storage) as well as in TWRP/OrangeFox.
+
+To build the zip locally from an existing `boot.img`:
+
+```bash
+tools/mkzip.sh out/target/product/mh2lm/boot.img
+```
+
+### fastboot
+
 ```bash
 # Boot it once without flashing (recommended first):
 fastboot boot out/target/product/mh2lm/boot.img

@@ -42,7 +42,9 @@ jobs:
           # Mount the large volume where we actually sync/build, otherwise the
           # build fills the small root filesystem and fails with ENOSPC.
           build-mount-path: /home/runner/twrp
-          root-reserve-mb: 2048
+          # Keep enough free space on the root fs for apt packages / toolchain;
+          # the source + out/ live on the mounted volume, not root.
+          root-reserve-mb: 8192
           swap-size-mb: 8192
           remove-dotnet: "true"
           remove-android: "true"

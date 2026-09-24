@@ -1,0 +1,27 @@
+# Android fstab file for TWRP - LG G8X ThinQ / V50S (mh2lm)
+#
+# mount_point       fstype  device                                           device2   flags
+#
+# Boot / firmware images
+/boot               emmc    /dev/block/bootdevice/by-name/boot                          flags=slotselect;backup=1;flashimg=1;display="Boot"
+/dtbo               emmc    /dev/block/bootdevice/by-name/dtbo                           flags=slotselect;backup=1;flashimg=1;display="DTBO"
+/vbmeta             emmc    /dev/block/bootdevice/by-name/vbmeta                         flags=slotselect;backup=1;flashimg=1;display="Vbmeta"
+
+# System / vendor / product (physical A/B partitions, read-only images for backup)
+/system_root        ext4    /dev/block/bootdevice/by-name/system                        flags=slotselect;backup=1;display="System";mounttodecrypt
+/vendor             ext4    /dev/block/bootdevice/by-name/vendor                         flags=slotselect;backup=1;display="Vendor";mounttodecrypt
+/product            ext4    /dev/block/bootdevice/by-name/product                        flags=slotselect;backup=1;display="Product"
+
+# Data / metadata
+/metadata           ext4    /dev/block/bootdevice/by-name/metadata                       flags=display="Metadata";backup=1;wipeingui
+/data               f2fs    /dev/block/bootdevice/by-name/userdata                       flags=fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized;metadata_encryption=aes-256-xts;keydirectory=/metadata/vold/metadata_encryption
+
+# Vendor persist / misc
+/persist            ext4    /dev/block/bootdevice/by-name/persist                        flags=display="Persist"
+/persist-lg         ext4    /dev/block/bootdevice/by-name/drm                            flags=display="Persist-LG"
+/misc               emmc    /dev/block/bootdevice/by-name/misc                           flags=display="Misc"
+/modem              vfat    /dev/block/bootdevice/by-name/modem                          flags=slotselect;display="Modem";mounttodecrypt
+
+# Removable storage
+/external_sd        auto    /dev/block/mmcblk1p1     /dev/block/mmcblk1                  flags=display="MicroSD";storage;wipeingui;removable
+/usb_otg            auto    /dev/block/sda1          /dev/block/sda                      flags=display="USB-OTG";storage;wipeingui;removable

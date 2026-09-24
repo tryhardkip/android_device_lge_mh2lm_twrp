@@ -1,0 +1,121 @@
+name: Build TWRP (mh2lm)
+
+# Builds TWRP / LineageOS Recovery for the LG G8X ThinQ / V50S (mh2lm).
+# This is a recovery-as-boot A/B device, so the output artifact is boot.img.
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_branch:
+        description: "TWRP minimal manifest branch"
+        required: true
+        default: "twrp-14.1"
+      device_tree_branch:
+        description: "This device tree branch"
+        required: true
+        default: "main"
+      kernel_branch:
+        description: "Kernel source branch"
+        required: true
+        default: "lineage-23.2"
+      lunch_target:
+        description: "Lunch target"
+        required: true
+        default: "twrp_mh2lm-eng"
+      build_target:
+        description: "make target (bootimage for recovery-as-boot devices)"
+        required: true
+        default: "bootimage"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Maximize build disk space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 2048
+          swap-size-mb: 8192
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+
+      - name: Checkout device tree
+        uses: actions/checkout@v4
+        with:
+          path: device_tree
+          ref: ${{ github.event.inputs.device_tree_branch }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev \
+            libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 \
+            libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
+            zip zlib1g-dev python3 python-is-python3 openjdk-11-jdk-headless \
+            libncurses5 libncurses5-dev
+
+      - name: Configure git and repo tool
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global color.ui false
+          mkdir -p ~/bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Initialize and sync TWRP minimal manifest
+        run: |
+          mkdir -p "$HOME/twrp"
+          cd "$HOME/twrp"
+          repo init --depth=1 \
+            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git \
+            -b ${{ github.event.inputs.manifest_branch }}
+          repo sync -c -j"$(nproc --all)" --force-sync --no-clone-bundle --no-tags
+
+      - name: Place device tree and kernel source
+        run: |
+          cd "$HOME/twrp"
+          rm -rf device/lge/mh2lm_twrp
+          mkdir -p device/lge kernel/lge
+          cp -a "$GITHUB_WORKSPACE/device_tree" device/lge/mh2lm_twrp
+          git clone --depth=1 \
+            -b ${{ github.event.inputs.kernel_branch }} \
+            https://github.com/rainbowdashh/android_kernel_lge_sm8150.git \
+            kernel/lge/sm8150
+
+      - name: Build recovery image
+        run: |
+          cd "$HOME/twrp"
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export LC_ALL=C
+          source build/envsetup.sh
+          lunch ${{ github.event.inputs.lunch_target }}
+          mka ${{ github.event.inputs.build_target }} -j"$(nproc --all)"
+
+      - name: Locate output image
+        id: out
+        run: |
+          cd "$HOME/twrp"
+          OUT_DIR="out/target/product/mh2lm"
+          for f in boot.img recovery.img; do
+            if [ -f "$OUT_DIR/$f" ]; then
+              echo "found=$OUT_DIR/$f" >> "$GITHUB_OUTPUT"
+              echo "Found $OUT_DIR/$f"
+            fi
+          done
+          ls -lh "$OUT_DIR"/*.img || true
+
+      - name: Upload recovery artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-mh2lm
+          if-no-files-found: error
+          path: |
+            /home/runner/twrp/out/target/product/mh2lm/boot.img
+            /home/runner/twrp/out/target/product/mh2lm/recovery.img

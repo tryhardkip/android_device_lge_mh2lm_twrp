@@ -1,0 +1,9 @@
+# Drop prebuilt kernel artifacts here if you don't want to build the kernel
+# from source.
+#
+#   Image.gz   - prebuilt kernel image
+#   dtb.img    - device tree blob
+#   dtbo.img   - device tree overlay image
+#
+# Then uncomment the TARGET_PREBUILT_* / BOARD_PREBUILT_DTBOIMAGE lines in
+# ../BoardConfig.mk.

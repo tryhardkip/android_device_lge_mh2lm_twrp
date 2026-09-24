@@ -22,6 +22,12 @@ fi
 
 OUT_ZIP="${2:-$REPO_DIR/TWRP-mh2lm-$(date +%Y%m%d).zip}"
 
+# Resolve OUT_ZIP to an absolute path. We cd into the staging dir before
+# creating the archive, so a relative output path would otherwise be created
+# (or fail with zip ZE_CREAT / exit 15) relative to the temp dir.
+mkdir -p "$(dirname "$OUT_ZIP")"
+OUT_ZIP="$(cd "$(dirname "$OUT_ZIP")" && pwd)/$(basename "$OUT_ZIP")"
+
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 

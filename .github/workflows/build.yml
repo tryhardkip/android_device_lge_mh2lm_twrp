@@ -30,10 +30,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 350
+    env:
+      # Make git fail fast instead of hanging on a credential prompt in CI.
+      GIT_TERMINAL_PROMPT: "0"
+      GIT_ASKPASS: "/bin/echo"
     steps:
       - name: Maximize build disk space
         uses: easimon/maximize-build-space@v10
         with:
+          # Mount the large volume where we actually sync/build, otherwise the
+          # build fills the small root filesystem and fails with ENOSPC.
+          build-mount-path: /home/runner/twrp
           root-reserve-mb: 2048
           swap-size-mb: 8192
           remove-dotnet: "true"
@@ -70,13 +78,25 @@ jobs:
           echo "$HOME/bin" >> "$GITHUB_PATH"
 
       - name: Initialize and sync TWRP minimal manifest
+        timeout-minutes: 90
         run: |
           mkdir -p "$HOME/twrp"
           cd "$HOME/twrp"
           repo init --depth=1 \
             -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git \
             -b ${{ github.event.inputs.manifest_branch }}
-          repo sync -c -j"$(nproc --all)" --force-sync --no-clone-bundle --no-tags
+          # Retry sync a few times to survive transient fetch errors in CI.
+          n=0
+          until [ "$n" -ge 3 ]; do
+            if repo sync -c -j"$(nproc --all)" --force-sync \
+                 --no-clone-bundle --no-tags --optimized-fetch --retry-fetches=3; then
+              break
+            fi
+            n=$((n+1))
+            echo "repo sync failed (attempt $n), retrying in 15s..."
+            sleep 15
+          done
+          [ "$n" -lt 3 ] || { echo "repo sync failed after retries"; exit 1; }
 
       - name: Place device tree and kernel source
         run: |

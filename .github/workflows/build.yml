@@ -135,6 +135,26 @@ jobs:
           git clone --depth=1 -b ${{ github.event.inputs.KERNEL_BRANCH }} \
             ${{ github.event.inputs.KERNEL_URL }} "${{ github.event.inputs.KERNEL_PATH }}"
 
+      - name: Disable device DT overlays (recovery only needs the base SoC DTB)
+        # The mh2lm .dtbo overlays fail to compile ("&soc {" syntax error in
+        # sm8150-mh2lm_common.dtsi) and abort `make dtbs`. They are NOT needed for
+        # the recovery boot image: dtb.img only concatenates the base *.dtb files,
+        # and on this A/B + separated-DTBO device the bootloader merges the correct
+        # overlay from the on-device `dtbo` partition (which our dd installer never
+        # touches) at boot. Disabling CONFIG_BUILD_ARM64_DT_OVERLAY makes the
+        # kernel's lge/Makefile emit no .dtbo targets while the base qcom/*.dtb
+        # still build, letting `make dtbs` (and thus bootimage) succeed.
+        run: |
+          cd "$HOME/workspace"
+          DEFCONFIG="${{ github.event.inputs.KERNEL_PATH }}/arch/arm64/configs/vendor/lineageos_mh2_defconfig"
+          if grep -q '^CONFIG_BUILD_ARM64_DT_OVERLAY=y' "$DEFCONFIG"; then
+            sed -i 's/^CONFIG_BUILD_ARM64_DT_OVERLAY=y/# CONFIG_BUILD_ARM64_DT_OVERLAY is not set/' "$DEFCONFIG"
+            echo "Disabled CONFIG_BUILD_ARM64_DT_OVERLAY in $DEFCONFIG"
+          else
+            echo "CONFIG_BUILD_ARM64_DT_OVERLAY=y not found; leaving defconfig unchanged"
+          fi
+          grep -n 'CONFIG_BUILD_ARM64_DT_OVERLAY' "$DEFCONFIG" || true
+
       - name: Build recovery
         run: |
           cd "$HOME/workspace"

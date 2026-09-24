@@ -130,3 +130,11 @@ fastboot flash boot out/target/product/mh2lm/boot.img
 - Decryption relies on the FBE v2 + metadata-encryption flags in the fstab.
   If decryption fails, confirm the `keydirectory` and encryption options match
   the LineageOS 23.2 `fstab.qcom`.
+- Device DT overlays: the CI build disables `CONFIG_BUILD_ARM64_DT_OVERLAY`
+  because the kernel's `sm8150-mh2lm` `.dtbo` overlays fail to compile
+  (`&soc {` syntax error in `sm8150-mh2lm_common.dtsi`) and abort `make dtbs`.
+  The recovery `boot.img` only needs the base SoC `.dtb`; on this A/B +
+  separated-DTBO device the bootloader merges the correct overlay from the
+  on-device `dtbo` partition (untouched by the `dd` installer) at boot, so no
+  `dtbo.img` is produced or flashed. If a future kernel fixes the overlay DTS,
+  drop the "Disable device DT overlays" step in `.github/workflows/build.yml`.

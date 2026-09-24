@@ -47,6 +47,17 @@ jobs:
           docker-images: true
           swap-storage: false
 
+      - name: Set swap to 20G
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 20
+
+      - name: Check swap status
+        run: |
+          free -h
+          swapon --show
+          df -h /
+
       - name: Checkout device tree
         uses: actions/checkout@v4
         with:
@@ -63,6 +74,23 @@ jobs:
             libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
             zip zlib1g-dev python3 python-is-python3 openjdk-11-jdk-headless \
             libncurses5 libncurses5-dev
+
+      - name: Configure ccache
+        run: |
+          mkdir -p ~/.ccache
+          echo "max_size = 20G" > ~/.ccache/ccache.conf
+          echo "compression = true" >> ~/.ccache/ccache.conf
+          echo "CCACHE_DIR=${HOME}/.ccache" >> "$GITHUB_ENV"
+          echo "USE_CCACHE=1" >> "$GITHUB_ENV"
+          echo "CCACHE_EXEC=$(command -v ccache)" >> "$GITHUB_ENV"
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-twrp-mh2lm-${{ github.event.inputs.manifest_branch }}
+          restore-keys: |
+            ccache-twrp-mh2lm-
 
       - name: Configure git and repo tool
         run: |
@@ -114,9 +142,11 @@ jobs:
           cd "$HOME/twrp"
           export ALLOW_MISSING_DEPENDENCIES=true
           export LC_ALL=C
+          ccache -M 20G >/dev/null 2>&1 || true
           source build/envsetup.sh
           lunch ${{ github.event.inputs.lunch_target }}
           mka ${{ github.event.inputs.build_target }} -j"$(nproc --all)"
+          ccache -s || true
 
       - name: Locate output image
         id: out

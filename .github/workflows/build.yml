@@ -1,119 +1,118 @@
 name: Build TWRP (mh2lm)
 
 # Builds TWRP / LineageOS Recovery for the LG G8X ThinQ / V50S (mh2lm).
-# This is a recovery-as-boot A/B device, so the output artifact is boot.img.
+# Recovery-as-boot A/B device -> output is boot.img (+ flashable zip).
+# Recipe adapted from azwhikaru/Action-TWRP-Builder.
 
 on:
   workflow_dispatch:
     inputs:
-      manifest_branch:
-        description: "TWRP minimal manifest branch"
+      MANIFEST_URL:
+        description: "TWRP minimal manifest URL"
+        required: true
+        default: "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp"
+      MANIFEST_BRANCH:
+        description: "Manifest branch"
         required: true
         default: "twrp-14.1"
-      device_tree_branch:
-        description: "This device tree branch"
+      KERNEL_URL:
+        description: "Kernel source URL"
         required: true
-        default: "main"
-      kernel_branch:
-        description: "Kernel source branch"
+        default: "https://github.com/rainbowdashh/android_kernel_lge_sm8150"
+      KERNEL_BRANCH:
+        description: "Kernel branch"
         required: true
         default: "lineage-23.2"
-      lunch_target:
-        description: "Lunch target"
+      KERNEL_PATH:
+        description: "Kernel path in tree"
         required: true
-        default: "twrp_mh2lm-eng"
-      build_target:
-        description: "make target (bootimage for recovery-as-boot devices)"
+        default: "kernel/lge/sm8150"
+      DEVICE_PATH:
+        description: "Device tree path in tree"
         required: true
-        default: "bootimage"
+        default: "device/lge/mh2lm_twrp"
+      DEVICE_NAME:
+        description: "Device codename (out product dir)"
+        required: true
+        default: "mh2lm"
+      MAKEFILE_NAME:
+        description: "Product / lunch name"
+        required: true
+        default: "twrp_mh2lm"
+      BUILD_TARGET:
+        description: "Build target: boot / recovery / vendorboot"
+        required: true
+        default: "boot"
 
 jobs:
   build:
+    # Only the repo owner can run this workflow.
+    if: github.event.repository.owner.id == github.event.sender.id
     runs-on: ubuntu-22.04
-    timeout-minutes: 350
+    permissions:
+      contents: write
     env:
-      # Make git fail fast instead of hanging on a credential prompt in CI.
       GIT_TERMINAL_PROMPT: "0"
       GIT_ASKPASS: "/bin/echo"
     steps:
-      - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          android: false
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: false
-
-      - name: Set swap to 20G
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 20
-
-      - name: Check swap status
+      - name: Display run parameters
         run: |
-          free -h
-          swapon --show
-          df -h /
+          echo "Manifest: ${{ github.event.inputs.MANIFEST_URL }} (${{ github.event.inputs.MANIFEST_BRANCH }})"
+          echo "Kernel:   ${{ github.event.inputs.KERNEL_URL }} (${{ github.event.inputs.KERNEL_BRANCH }}) -> ${{ github.event.inputs.KERNEL_PATH }}"
+          echo "Device:   ${{ github.event.inputs.DEVICE_PATH }} / ${{ github.event.inputs.MAKEFILE_NAME }}"
+          echo "Target:   ${{ github.event.inputs.BUILD_TARGET }}image"
 
       - name: Checkout device tree
         uses: actions/checkout@v4
         with:
           path: device_tree
-          ref: ${{ github.event.inputs.device_tree_branch }}
 
-      - name: Install build dependencies
+      - name: Cleanup / reclaim disk space
+        uses: rokibhasansagar/slimhub_actions@main
+
+      - name: Prepare the environment
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
-            git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev \
-            libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 \
-            libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
-            zip zlib1g-dev python3 python-is-python3 openjdk-11-jdk-headless \
-            libncurses5 libncurses5-dev
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -yq \
+            gperf gcc-multilib g++-multilib libc6-dev lib32ncurses-dev \
+            x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev \
+            libxml2-utils xsltproc bc ccache lib32readline-dev lib32z1-dev \
+            liblz4-tool libncurses-dev libsdl1.2-dev build-essential \
+            libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop \
+            pngcrush schedtool squashfs-tools imagemagick libbz2-dev lzma \
+            ncftp qemu-user-static libncurses6 python3 python-is-python3 \
+            tar rsync zip unzip curl
 
-      - name: Configure ccache
-        run: |
-          mkdir -p ~/.ccache
-          echo "max_size = 20G" > ~/.ccache/ccache.conf
-          echo "compression = true" >> ~/.ccache/ccache.conf
-          echo "CCACHE_DIR=${HOME}/.ccache" >> "$GITHUB_ENV"
-          echo "USE_CCACHE=1" >> "$GITHUB_ENV"
-          echo "CCACHE_EXEC=$(command -v ccache)" >> "$GITHUB_ENV"
-
-      - name: Cache ccache
-        uses: actions/cache@v4
+      - name: Install OpenJDK 11
+        uses: actions/setup-java@v4
         with:
-          path: ~/.ccache
-          key: ccache-twrp-mh2lm-${{ github.event.inputs.manifest_branch }}
-          restore-keys: |
-            ccache-twrp-mh2lm-
+          distribution: "zulu"
+          java-version: "11"
 
-      - name: Configure git and repo tool
+      - name: Set swap to 16G
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 16
+
+      - name: Install repo tool
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global color.ui false
           mkdir -p ~/bin
           curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> "$GITHUB_PATH"
 
-      - name: Initialize and sync TWRP minimal manifest
+      - name: Initialize and sync manifest
         timeout-minutes: 180
         run: |
           df -h /
-          mkdir -p "$HOME/twrp"
-          cd "$HOME/twrp"
-          repo init --depth=1 \
-            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git \
-            -b ${{ github.event.inputs.manifest_branch }}
-          # Retry sync a few times to survive transient fetch errors in CI.
-          # Each attempt is hard-capped with `timeout` so a hung fetch gets
-          # killed and retried instead of freezing the whole step.
+          mkdir -p "$HOME/workspace"
+          cd "$HOME/workspace"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global color.ui false
+          repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} \
+            -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+          # Retry + per-attempt timeout so a hung fetch is killed and retried.
           n=0
           until [ "$n" -ge 4 ]; do
             if timeout 45m repo sync -c -j4 --force-sync \
@@ -128,55 +127,53 @@ jobs:
 
       - name: Place device tree and kernel source
         run: |
-          cd "$HOME/twrp"
-          rm -rf device/lge/mh2lm_twrp
-          mkdir -p device/lge kernel/lge
-          cp -a "$GITHUB_WORKSPACE/device_tree" device/lge/mh2lm_twrp
-          git clone --depth=1 \
-            -b ${{ github.event.inputs.kernel_branch }} \
-            https://github.com/rainbowdashh/android_kernel_lge_sm8150.git \
-            kernel/lge/sm8150
+          cd "$HOME/workspace"
+          rm -rf "${{ github.event.inputs.DEVICE_PATH }}"
+          mkdir -p "$(dirname "${{ github.event.inputs.DEVICE_PATH }}")"
+          cp -a "$GITHUB_WORKSPACE/device_tree" "${{ github.event.inputs.DEVICE_PATH }}"
+          rm -rf "${{ github.event.inputs.KERNEL_PATH }}"
+          git clone --depth=1 -b ${{ github.event.inputs.KERNEL_BRANCH }} \
+            ${{ github.event.inputs.KERNEL_URL }} "${{ github.event.inputs.KERNEL_PATH }}"
 
-      - name: Build recovery image
+      - name: Build recovery
         run: |
-          cd "$HOME/twrp"
+          cd "$HOME/workspace"
           export ALLOW_MISSING_DEPENDENCIES=true
           export LC_ALL=C
-          ccache -M 20G >/dev/null 2>&1 || true
           source build/envsetup.sh
-          lunch ${{ github.event.inputs.lunch_target }}
-          mka ${{ github.event.inputs.build_target }} -j"$(nproc --all)"
-          ccache -s || true
-
-      - name: Locate output image
-        id: out
-        run: |
-          cd "$HOME/twrp"
-          OUT_DIR="out/target/product/mh2lm"
-          for f in boot.img recovery.img; do
-            if [ -f "$OUT_DIR/$f" ]; then
-              echo "found=$OUT_DIR/$f" >> "$GITHUB_OUTPUT"
-              echo "Found $OUT_DIR/$f"
-            fi
-          done
-          ls -lh "$OUT_DIR"/*.img || true
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
+          make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)"
 
       - name: Build flashable installer zip
         run: |
-          cd "$HOME/twrp"
-          OUT_DIR="out/target/product/mh2lm"
-          IMG="$OUT_DIR/boot.img"
-          [ -f "$IMG" ] || IMG="$OUT_DIR/recovery.img"
+          cd "$HOME/workspace"
+          OUT_DIR="out/target/product/${{ github.event.inputs.DEVICE_NAME }}"
+          IMG="$OUT_DIR/${{ github.event.inputs.BUILD_TARGET }}.img"
+          [ -f "$IMG" ] || IMG="$OUT_DIR/boot.img"
           bash "$GITHUB_WORKSPACE/device_tree/tools/mkzip.sh" \
-            "$IMG" "$OUT_DIR/TWRP-mh2lm-$(date +%Y%m%d).zip"
-          ls -lh "$OUT_DIR"/*.zip
+            "$IMG" "$OUT_DIR/TWRP-${{ github.event.inputs.DEVICE_NAME }}-$(date +%Y%m%d).zip"
+          ls -lh "$OUT_DIR"/*.img "$OUT_DIR"/*.zip || true
 
-      - name: Upload recovery artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: twrp-mh2lm
+          name: twrp-${{ github.event.inputs.DEVICE_NAME }}
           if-no-files-found: error
           path: |
-            /home/runner/twrp/out/target/product/mh2lm/boot.img
-            /home/runner/twrp/out/target/product/mh2lm/recovery.img
-            /home/runner/twrp/out/target/product/mh2lm/TWRP-mh2lm-*.zip
+            /home/runner/workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+            /home/runner/workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/TWRP-*.zip
+
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: twrp-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+          tag_name: ${{ github.run_id }}
+          body: |
+            TWRP for ${{ github.event.inputs.DEVICE_NAME }}
+            Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+            Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+          files: |
+            /home/runner/workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+            /home/runner/workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/TWRP-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

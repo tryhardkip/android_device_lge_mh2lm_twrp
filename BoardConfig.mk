@@ -62,7 +62,15 @@ TARGET_KERNEL_HEADER_ARCH := arm64
 TARGET_KERNEL_CLANG_COMPILE := true
 TARGET_KERNEL_SOURCE := kernel/lge/sm8150
 TARGET_KERNEL_CONFIG := vendor/lineageos_mh2_defconfig
-BOARD_KERNEL_SEPARATED_DTBO := true
+# NOTE: We deliberately do NOT build a separate dtbo.img.
+# The CI disables CONFIG_BUILD_ARM64_DT_OVERLAY (the mh2lm panel overlays fail
+# to compile), so `make dtbs` emits base qcom/*.dtb (embedded into boot.img via
+# BOARD_INCLUDE_DTB_IN_BOOTIMG) but zero *.dtbo files. With
+# BOARD_KERNEL_SEPARATED_DTBO the kernel dtbo.img packaging step then runs
+# `mkdtboimg.py create ... $(find -name '*.dtbo')` on an empty list and aborts.
+# This device is A/B + recovery-as-boot and the installer only dd's boot.img,
+# leaving the on-device dtbo partition intact, so no dtbo.img is required.
+# BOARD_KERNEL_SEPARATED_DTBO := true
 BOARD_MKBOOTIMG_ARGS += --base $(BOARD_KERNEL_BASE) --pagesize $(BOARD_KERNEL_PAGESIZE) --ramdisk_offset $(BOARD_RAMDISK_OFFSET) --tags_offset $(BOARD_KERNEL_TAGS_OFFSET) --kernel_offset $(BOARD_KERNEL_OFFSET) --dtb_offset $(BOARD_DTB_OFFSET) --header_version $(BOARD_BOOT_HEADER_VERSION)
 
 # Uncomment the following two lines and drop the images into prebuilt/
@@ -90,7 +98,11 @@ TARGET_USERIMAGES_USE_F2FS := true
 
 # Recovery (recovery-as-boot A/B device)
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
-BOARD_INCLUDE_RECOVERY_DTBO := true
+# BOARD_INCLUDE_RECOVERY_DTBO would make mkbootimg pass --recovery_dtbo, which
+# requires a (recovery) dtbo image. We build none (see the dtbo note above), so
+# leave it disabled; the bootloader supplies the panel overlay from the
+# untouched on-device dtbo partition at boot.
+# BOARD_INCLUDE_RECOVERY_DTBO := true
 BOARD_USES_RECOVERY_AS_BOOT := true
 TARGET_NO_RECOVERY := true
 TARGET_RECOVERY_PIXEL_FORMAT := "RGBX_8888"

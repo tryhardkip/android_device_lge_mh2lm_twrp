@@ -136,5 +136,9 @@ fastboot flash boot out/target/product/mh2lm/boot.img
   The recovery `boot.img` only needs the base SoC `.dtb`; on this A/B +
   separated-DTBO device the bootloader merges the correct overlay from the
   on-device `dtbo` partition (untouched by the `dd` installer) at boot, so no
-  `dtbo.img` is produced or flashed. If a future kernel fixes the overlay DTS,
-  drop the "Disable device DT overlays" step in `.github/workflows/build.yml`.
+  `dtbo.img` is produced or flashed. To match this, `BoardConfig.mk` leaves
+  `BOARD_KERNEL_SEPARATED_DTBO` and `BOARD_INCLUDE_RECOVERY_DTBO` disabled;
+  otherwise the kernel dtbo packaging step (`mkdtboimg.py create` on an empty
+  `*.dtbo` list) or `mkbootimg --recovery_dtbo` would fail. If a future kernel
+  fixes the overlay DTS, re-enable those two flags and drop the "Disable device
+  DT overlays" step in `.github/workflows/build.yml`.
